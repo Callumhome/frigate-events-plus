@@ -59,6 +59,7 @@ interface FrigateEventsCardConfig extends LovelaceCardConfig {
   daily_clear_time?: string; // Format: "HH:MM" (24-hour), e.g., "04:00"
   video?: boolean;
   video_on_hover?: boolean;
+  auto_hide_watched?: boolean;
   muted?: boolean;
   offset?: number;
   reverse?: boolean;
@@ -101,7 +102,8 @@ const DEFAULT_CONFIG: Partial<FrigateEventsCardConfig> = {
   show_modal_navigation: false,
   show_temp_mask: true,
   temp_mask_duration: '24:00:00',
-  title: 'Frigate Events',
+  title: 'Frigate Events Plus',
+  auto_hide_watched: false,
   video: true,
   video_on_hover: true,
   muted: true,
@@ -137,6 +139,7 @@ export class FrigateEventsCard extends LitElement {
   @property({ attribute: false }) public hass?: HomeAssistant;
   @state() private _config?: FrigateEventsCardConfig;
   @state() private _events: FrigateEvent[] = [];
+  @state() private _watchedEventIds: string[] = [];
   @state() private _selectedEvent?: FrigateEvent;
   @state() private _loading = true;
   @state() private _error?: string;
@@ -249,6 +252,7 @@ export class FrigateEventsCard extends LitElement {
   }
 
   protected async firstUpdated(): Promise<void> {
+    this._loadWatchedEventIds();
     await this._loadEvents();
     await this._subscribeToEvents();
     this._setupVisibilityHandler();
@@ -2078,6 +2082,35 @@ export class FrigateEventsCard extends LitElement {
     return skipSeconds > 0 ? `#t=${skipSeconds}` : '';
   }
 
+  /** Load locally watched event IDs. This only hides thumbnails; it never deletes Frigate data. */
+  private _loadWatchedEventIds(): void {
+    try {
+      const stored = window.localStorage.getItem(this._getWatchedStorageKey());
+      const parsed: unknown = stored ? JSON.parse(stored) : [];
+      this._watchedEventIds = Array.isArray(parsed)
+        ? parsed.filter((id): id is string => typeof id === 'string')
+        : [];
+    } catch (error) {
+      console.warn('Frigate Events Plus: unable to load watched-event history.', error);
+      this._watchedEventIds = [];
+    }
+  }
+
+  private _getWatchedStorageKey(): string {
+    return `frigate-events-plus-watched:${this._config?.frigate_client_id || 'frigate'}`;
+  }
+
+  /** Only a modal video reaching its natural end counts as watched; hover previews never do. */
+  private _markEventWatched(event: FrigateEvent): void {
+    if (!this._config?.auto_hide_watched || this._watchedEventIds.includes(event.id)) return;
+    this._watchedEventIds = [...this._watchedEventIds, event.id];
+    try {
+      window.localStorage.setItem(this._getWatchedStorageKey(), JSON.stringify(this._watchedEventIds));
+    } catch (error) {
+      console.warn('Frigate Events Plus: unable to save watched-event history.', error);
+    }
+  }
+
   private _getEventsToShow(): FrigateEvent[] {
     if (!this._config) return [];
     const isScroll = !!this._config.scroll;
@@ -2086,6 +2119,9 @@ export class FrigateEventsCard extends LitElement {
     const limit = isScroll ? scrollLimit : visibleCount;
 
     let visibleEvents = this._events;
+    if (this._config.auto_hide_watched) {
+      visibleEvents = visibleEvents.filter(event => !this._watchedEventIds.includes(event.id));
+    }
     const resetTimestamp = this._getDailyResetTimestamp();
     if (resetTimestamp !== null) {
       visibleEvents = this._events.filter(e => (e.start_time || 0) > resetTimestamp);
@@ -2252,6 +2288,11 @@ export class FrigateEventsCard extends LitElement {
     const videoEl = container.querySelector('video');
     if (videoEl) {
       videoEl.muted = this._config?.muted !== false;
+      // Only the non-looping modal clip can mark an event as watched.
+      if (this._config?.auto_hide_watched) {
+        const watchedEvent = event;
+        videoEl.addEventListener('ended', () => this._markEventWatched(watchedEvent), { once: true });
+      }
     }
 
     // Stop propagation on content click
