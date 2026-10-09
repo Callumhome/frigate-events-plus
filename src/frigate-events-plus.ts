@@ -60,6 +60,7 @@ interface FrigateEventsCardConfig extends LovelaceCardConfig {
   video?: boolean;
   video_on_hover?: boolean;
   auto_hide_watched?: boolean;
+  auto_hide_reviewed?: boolean;
   muted?: boolean;
   offset?: number;
   reverse?: boolean;
@@ -104,6 +105,7 @@ const DEFAULT_CONFIG: Partial<FrigateEventsCardConfig> = {
   temp_mask_duration: '24:00:00',
   title: 'Frigate Events Plus',
   auto_hide_watched: false,
+  auto_hide_reviewed: false,
   video: true,
   video_on_hover: true,
   muted: true,
@@ -140,6 +142,7 @@ export class FrigateEventsCard extends LitElement {
   @state() private _config?: FrigateEventsCardConfig;
   @state() private _events: FrigateEvent[] = [];
   @state() private _watchedEventIds: string[] = [];
+  @state() private _reviewedSegments: Array<{ camera: string; start_time: number; end_time?: number; data?: { objects?: string[] } }> = [];
   @state() private _selectedEvent?: FrigateEvent;
   @state() private _loading = true;
   @state() private _error?: string;
@@ -856,6 +859,7 @@ export class FrigateEventsCard extends LitElement {
       });
 
       this._events = events.sort((a, b) => (b.start_time || 0) - (a.start_time || 0));
+      await this._loadReviewedSegments(events);
     } catch (e: any) {
       console.warn('Temporary connection issue loading Frigate events:', e);
       const msg = e?.message || (typeof e === 'object' ? JSON.stringify(e) : String(e));
@@ -869,6 +873,51 @@ export class FrigateEventsCard extends LitElement {
     } finally {
       this._loading = false;
     }
+  }
+
+  /** Fetch per-user reviewed segments through the Frigate Home Assistant integration.
+   * This is read-only and only filters the card; it never modifies Frigate data.
+   */
+  private async _loadReviewedSegments(events: FrigateEvent[]): Promise<void> {
+    if (!this._config?.auto_hide_reviewed || !this.hass || events.length === 0) {
+      this._reviewedSegments = [];
+      return;
+    }
+    try {
+      const response = await this.hass.callWS<unknown>({
+        type: 'frigate/reviews/get',
+        instance_id: this._config.frigate_client_id || 'frigate',
+        reviewed: true,
+        after: Math.max(0, Math.min(...events.map(event => event.start_time || 0)) - 120),
+        before: Math.max(...events.map(event => event.end_time || event.start_time || 0)) + 120,
+        limit: 1000,
+      } as any);
+      const parsed: unknown = typeof response === 'string' ? JSON.parse(response) : response;
+      this._reviewedSegments = Array.isArray(parsed)
+        ? parsed.filter((item: any) => item && typeof item.camera === 'string' && typeof item.start_time === 'number' && item.has_been_reviewed === true)
+            .map((item: any) => ({ camera: item.camera, start_time: item.start_time, end_time: item.end_time, data: item.data }))
+        : [];
+    } catch (error) {
+      // Older Frigate HA integrations may not expose frigate/reviews/get. Keep the
+      // card usable and leave events visible rather than hiding them incorrectly.
+      this._reviewedSegments = [];
+      console.debug('Frigate Events Plus: reviewed-event filtering is unavailable from this Frigate integration.', error);
+    }
+  }
+
+  private _isEventReviewed(event: FrigateEvent): boolean {
+    const eventStart = event.start_time || 0;
+    const eventEnd = event.end_time ?? eventStart;
+    return this._reviewedSegments.some(segment => {
+      if (segment.camera !== event.camera) return false;
+      const segmentEnd = segment.end_time ?? segment.start_time;
+      const overlaps = eventStart <= segmentEnd && eventEnd >= segment.start_time;
+      if (!overlaps) return false;
+      const objects = segment.data?.objects || [];
+      // Review segments may include multiple objects. If labels are present, require
+      // the event label to match; if not, camera/time overlap is the available signal.
+      return objects.length === 0 || objects.some(label => label === event.label || label === event.label + '-verified');
+    });
   }
 
   private async _subscribeToEvents(): Promise<void> {
@@ -2125,6 +2174,9 @@ export class FrigateEventsCard extends LitElement {
     }
     if (this._config.auto_hide_watched) {
       visibleEvents = visibleEvents.filter(event => !this._watchedEventIds.includes(event.id));
+    }
+    if (this._config.auto_hide_reviewed) {
+      visibleEvents = visibleEvents.filter(event => !this._isEventReviewed(event));
     }
 
     const offset = this._config.offset || 0;
