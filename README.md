@@ -14,6 +14,7 @@ It builds on the original MIT-licensed Frigate Events Card project. The original
 - Scrollable gallery, grid layouts, daily view reset and modal navigation.
 - Optionally hide events after the full-size modal clip finishes playing (`auto_hide_watched`). Hover previews do not count as watched.
 - Optionally hide events covered by Frigate review segments marked as reviewed for the current Frigate user (`auto_hide_reviewed`).
+- Collapse the gallery to a compact, configurable message when no new events remain (`collapse_when_empty`, `empty_state_text`); the normal gallery returns automatically when a new visible event arrives.
 - Watched state is stored locally in the browser. These features only hide cards; they never delete or alter Frigate events, clips, snapshots, or review status.
 
 ## Installation
@@ -29,9 +30,11 @@ type: custom:frigate-events-plus
 frigate_client_id: frigate
 auto_hide_watched: true
 auto_hide_reviewed: true
+collapse_when_empty: true
+empty_state_text: "Frigate — No New Events"
 ```
 
-`auto_hide_watched` and `auto_hide_reviewed` default to `false`. Reviewed-event filtering requires a version of the Frigate Home Assistant integration that supports the `frigate/reviews/get` WebSocket command. If that command is unavailable, the card keeps events visible rather than guessing.
+`auto_hide_watched` and `auto_hide_reviewed` default to `false`. `collapse_when_empty` defaults to `true`; set it to `false` to retain the old empty thumbnail placeholders. `empty_state_text` defaults to `Frigate — No New Events`. These options only affect the card display. Reviewed-event filtering requires a version of the Frigate Home Assistant integration that supports the `frigate/reviews/get` WebSocket command. If that command is unavailable, the card keeps events visible rather than guessing.
 
 ## Development
 
