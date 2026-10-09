@@ -2119,12 +2119,12 @@ export class FrigateEventsCard extends LitElement {
     const limit = isScroll ? scrollLimit : visibleCount;
 
     let visibleEvents = this._events;
-    if (this._config.auto_hide_watched) {
-      visibleEvents = visibleEvents.filter(event => !this._watchedEventIds.includes(event.id));
-    }
     const resetTimestamp = this._getDailyResetTimestamp();
     if (resetTimestamp !== null) {
-      visibleEvents = this._events.filter(e => (e.start_time || 0) > resetTimestamp);
+      visibleEvents = visibleEvents.filter(e => (e.start_time || 0) > resetTimestamp);
+    }
+    if (this._config.auto_hide_watched) {
+      visibleEvents = visibleEvents.filter(event => !this._watchedEventIds.includes(event.id));
     }
 
     const offset = this._config.offset || 0;
