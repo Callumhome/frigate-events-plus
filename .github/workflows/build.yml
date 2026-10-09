@@ -32,5 +32,6 @@ jobs:
           if ! git diff --quiet -- frigate-events-plus.js; then
             git add frigate-events-plus.js
             git commit -m "build: update Frigate Events Plus bundle"
+            git pull --rebase origin main
             git push
           fi
