@@ -1,5 +1,11 @@
 # Frigate Events Plus
 
+<p align="center">
+  <img src="https://raw.githubusercontent.com/blakeblackshear/frigate/dev/docs/static/img/branding/logo.svg" alt="Frigate NVR logo" width="180" />
+</p>
+
+<p align="center"><strong>A cleaner event gallery for Home Assistant and Frigate NVR</strong></p>
+
 Frigate Events Plus is Callumhome's maintained version of a Home Assistant Lovelace card for browsing Frigate detection events.
 
 It builds on the original MIT-licensed Frigate Events Card project. The original copyright and licence notice are retained in `LICENSE`; inherited code remains subject to that licence.
