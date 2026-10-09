@@ -4119,11 +4119,18 @@ export class FrigateEventsCard extends LitElement {
     const scrollLimit = this._config.scroll_limit || 20;
     const limit = this._config.scroll ? scrollLimit : visibleCount;
 
-    // Filter events based on daily clear time
+    // Apply all visibility filters before limiting the gallery.
+    // Frigate review state and watched state are independent of the daily reset.
     let visibleEvents = this._events;
     const resetTimestamp = this._getDailyResetTimestamp();
     if (resetTimestamp !== null) {
-      visibleEvents = this._events.filter(e => (e.start_time || 0) > resetTimestamp);
+      visibleEvents = visibleEvents.filter(e => (e.start_time || 0) > resetTimestamp);
+    }
+    if (this._config.auto_hide_watched) {
+      visibleEvents = visibleEvents.filter(event => !this._watchedEventIds.includes(event.id));
+    }
+    if (this._config.auto_hide_reviewed) {
+      visibleEvents = visibleEvents.filter(event => !this._isEventReviewed(event));
     }
 
     // Limit to event count and calculate placeholders
