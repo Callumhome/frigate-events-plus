@@ -28,18 +28,18 @@ jobs:
         run: grep -q 'frigate-events-plus' frigate-events-plus.js
       - name: Verify bundle has expected card registration
         run: grep -q 'customCards' frigate-events-plus.js
-      - name: Create beta 2 release and attach bundle
+      - name: Create beta 3 release and attach bundle
         if: github.event_name == 'workflow_dispatch'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          if ! gh release view v2.5.0-beta.2 >/dev/null 2>&1; then
-            gh release create v2.5.0-beta.2 frigate-events-plus.js \
+          if ! gh release view v2.5.0-beta.3 >/dev/null 2>&1; then
+            gh release create v2.5.0-beta.3 frigate-events-plus.js \
               --prerelease \
-              --title "v2.5.0-beta.2" \
-              --notes "Beta 2: adds a compact configurable empty state. The gallery collapses to a single message when no visible events remain and automatically returns when new events arrive. Includes reviewed-event and watched-clip hiding. These options hide items from the card only; they do not delete Frigate recordings or review data."
+              --title "v2.5.0-beta.3" \
+              --notes "Beta 3: adds the Home Assistant visual card editor for configuring watched-event hiding, reviewed-event hiding, and the compact empty state without YAML edits. The card can now be configured using Home Assistant's visual editor. Choose whether to hide reviewed events, hide clips after full playback, collapse the card when empty, and edit the empty-state message. These options hide items from the card only; they do not delete Frigate recordings or review data."
           else
-            gh release upload v2.5.0-beta.2 frigate-events-plus.js --clobber
+            gh release upload v2.5.0-beta.3 frigate-events-plus.js --clobber
           fi
       - name: Commit updated distributable
         if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
