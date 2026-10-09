@@ -23,6 +23,18 @@ This repository is under active development. Do not treat the current build as a
 
 For development/testing, add `frigate-events-plus.js` as a JavaScript module resource in Home Assistant (Settings → Dashboards → Resources). Use the raw file URL from this repository, or download the file to `/config/www/` and reference it as `/local/frigate-events-plus.js`. This is still under development, so back up your dashboard before testing.
 
+### Visual configuration
+
+Frigate Events Plus includes a Home Assistant visual editor. After installing a release that includes the editor, open the card's configuration and choose these settings directly—users do not need to edit YAML:
+
+- Hide reviewed events
+- Hide clips after full playback
+- Collapse the card when no events remain
+- Set the empty-state message
+- Configure the card title, Frigate client ID, and maximum event count
+
+Advanced users can still configure the card with YAML if preferred.
+
 ### Optional YAML options
 
 ```yaml
