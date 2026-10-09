@@ -883,60 +883,70 @@ export class FrigateEventsCard extends LitElement {
       this._reviewedSegments = [];
       return;
     }
+
     try {
+      const eventTimes = events.flatMap(event => [event.start_time || 0, event.end_time || event.start_time || 0]);
       const response = await this.hass.callWS<unknown>({
         type: 'frigate/reviews/get',
         instance_id: this._config.frigate_client_id || 'frigate',
         reviewed: true,
-        after: Math.max(0, Math.min(...events.map(event => event.start_time || 0)) - 120),
-        before: Math.max(...events.map(event => event.end_time || event.start_time || 0)) + 120,
+        after: Math.max(0, Math.min(...eventTimes) - 300),
+        before: Math.max(...eventTimes) + 300,
         limit: 1000,
       } as any);
-      const parsed: unknown = typeof response === 'string' ? JSON.parse(response) : response;
+
+      const parsed: any = typeof response === 'string' ? JSON.parse(response) : response;
+      // Integrations/API versions may return the review list directly or wrap it.
+      const reviews: any[] = Array.isArray(parsed)
+        ? parsed
+        : Array.isArray(parsed?.reviews)
+          ? parsed.reviews
+          : Array.isArray(parsed?.data)
+            ? parsed.data
+            : [];
+
       const toUnixSeconds = (value: unknown): number | undefined => {
         if (typeof value === 'number' && Number.isFinite(value)) {
-          // Frigate review APIs use Unix seconds; tolerate milliseconds defensively.
           return value > 100000000000 ? value / 1000 : value;
         }
         if (typeof value === 'string' && value.trim()) {
           const numeric = Number(value);
-          if (Number.isFinite(numeric)) {
-            return numeric > 100000000000 ? numeric / 1000 : numeric;
-          }
+          if (Number.isFinite(numeric)) return numeric > 100000000000 ? numeric / 1000 : numeric;
           const parsedDate = Date.parse(value);
           if (Number.isFinite(parsedDate)) return parsedDate / 1000;
         }
         return undefined;
       };
-      this._reviewedSegments = Array.isArray(parsed)
-        ? parsed.flatMap((item: any) => {
-            if (!item || typeof item.camera !== 'string' || item.has_been_reviewed !== true) return [];
-            const start_time = toUnixSeconds(item.start_time);
-            const end_time = toUnixSeconds(item.end_time);
-            if (start_time === undefined) return [];
-            return [{ camera: item.camera, start_time, end_time, data: item.data }];
-          })
-        : [];
+
+      this._reviewedSegments = reviews.flatMap((item: any) => {
+        if (!item || typeof item.camera !== 'string') return [];
+        const reviewed = item.has_been_reviewed === true || item.reviewed === true;
+        if (!reviewed) return [];
+        const start_time = toUnixSeconds(item.start_time ?? item.startTime);
+        const end_time = toUnixSeconds(item.end_time ?? item.endTime) ?? start_time;
+        if (start_time === undefined) return [];
+        return [{ camera: item.camera, start_time, end_time, data: item.data }];
+      });
+
+      console.debug(`Frigate Events Plus: received ${reviews.length} reviews, ${this._reviewedSegments.length} marked reviewed.`);
+      // Re-render with the newly retrieved review state.
+      this.requestUpdate();
     } catch (error) {
-      // Older Frigate HA integrations may not expose frigate/reviews/get. Keep the
-      // card usable and leave events visible rather than hiding them incorrectly.
       this._reviewedSegments = [];
-      console.debug('Frigate Events Plus: reviewed-event filtering is unavailable from this Frigate integration.', error);
+      console.warn('Frigate Events Plus: unable to load reviewed Frigate events; leaving events visible.', error);
     }
   }
 
   private _isEventReviewed(event: FrigateEvent): boolean {
     const eventStart = event.start_time || 0;
     const eventEnd = event.end_time ?? eventStart;
+    // A Frigate review item is a time segment, not a one-to-one event ID.
+    // Match by camera and overlapping time; label matching can incorrectly leave
+    // reviewed events visible when Frigate's review object labels differ from event labels.
     return this._reviewedSegments.some(segment => {
       if (segment.camera !== event.camera) return false;
       const segmentEnd = segment.end_time ?? segment.start_time;
-      const overlaps = eventStart <= segmentEnd && eventEnd >= segment.start_time;
-      if (!overlaps) return false;
-      const objects = segment.data?.objects || [];
-      // Review segments may include multiple objects. If labels are present, require
-      // the event label to match; if not, camera/time overlap is the available signal.
-      return objects.length === 0 || objects.some(label => label === event.label || label === event.label + '-verified');
+      return eventStart <= segmentEnd && eventEnd >= segment.start_time;
     });
   }
 
