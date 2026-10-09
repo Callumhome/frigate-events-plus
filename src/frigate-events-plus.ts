@@ -63,6 +63,9 @@ interface FrigateEventsCardConfig extends LovelaceCardConfig {
   auto_hide_reviewed?: boolean;
   highlight_new_events?: boolean;
   play_notification_sound?: boolean;
+  priority_labels?: string[];
+  priority_first?: boolean;
+  priority_color?: string;
   collapse_when_empty?: boolean;
   empty_state_text?: string;
   muted?: boolean;
@@ -112,6 +115,9 @@ const DEFAULT_CONFIG: Partial<FrigateEventsCardConfig> = {
   auto_hide_reviewed: false,
   highlight_new_events: false,
   play_notification_sound: false,
+  priority_labels: [],
+  priority_first: false,
+  priority_color: '#ff9800',
   collapse_when_empty: true,
   empty_state_text: 'Frigate — No New Events',
   video: true,
@@ -2244,6 +2250,7 @@ export class FrigateEventsCard extends LitElement {
     const limit = isScroll ? scrollLimit : visibleCount;
 
     let visibleEvents = this._events;
+    const priorityLabels = this._config.priority_labels || [];
     const resetTimestamp = this._getDailyResetTimestamp();
     if (resetTimestamp !== null) {
       visibleEvents = visibleEvents.filter(e => (e.start_time || 0) > resetTimestamp);
@@ -4330,7 +4337,11 @@ export class FrigateEventsCard extends LitElement {
     const thumbnailUrl = getEventThumbnailURL(clientId, event.id);
 
     return html`
-      <div class="event" class=${this._config?.highlight_new_events && this._newEventIds.includes(event.id) ? "new-event" : ""}
+      <div class="event" class=${[
+          this._config?.highlight_new_events && this._newEventIds.includes(event.id) ? "new-event" : "",
+          (this._config?.priority_labels || []).includes(event.label) ? "priority-event" : ""
+        ].filter(Boolean).join(" ")}
+        style=${(this._config?.priority_labels || []).includes(event.label) && this._config?.priority_color ? `--frigate-events-plus-priority-color: ${this._config.priority_color}` : ""}
         @click=${() => this._handleEventClick(event)}
         @contextmenu=${(e: MouseEvent) => this._handleContextMenu(e, event)}
         @touchstart=${(e: TouchEvent) => this._handleTouchStart(e, event)}
@@ -4554,6 +4565,11 @@ export class FrigateEventsCard extends LitElement {
         touch-action: pan-x pan-y;
       }
 
+      .event.priority-event {
+        outline: 3px solid var(--frigate-events-plus-priority-color, #ff9800);
+        outline-offset: -3px;
+      }
+
       .event.new-event {
         outline: 3px solid var(--warning-color, #f9a825);
         outline-offset: -3px;
@@ -4734,6 +4750,20 @@ class FrigateEventsPlusEditor extends LitElement {
     ] } } },
     { name: 'highlight_new_events', selector: { boolean: {} } },
     { name: 'play_notification_sound', selector: { boolean: {} } },
+    { name: 'priority_labels', selector: { select: { multiple: true, options: [
+      { label: 'Person', value: 'person' }, { label: 'Car', value: 'car' },
+      { label: 'Bicycle', value: 'bicycle' }, { label: 'Motorcycle', value: 'motorcycle' },
+      { label: 'Bus', value: 'bus' }, { label: 'Truck', value: 'truck' },
+      { label: 'Cat', value: 'cat' }, { label: 'Dog', value: 'dog' },
+      { label: 'Bird', value: 'bird' }, { label: 'Horse', value: 'horse' },
+      { label: 'Other', value: 'other' }
+    ] } } },
+    { name: 'priority_first', selector: { boolean: {} } },
+    { name: 'priority_color', selector: { select: { options: [
+      { label: 'Orange', value: '#ff9800' }, { label: 'Red', value: '#f44336' },
+      { label: 'Yellow', value: '#ffeb3b' }, { label: 'Blue', value: '#2196f3' },
+      { label: 'Purple', value: '#9c27b0' }, { label: 'Green', value: '#4caf50' }
+    ] } } },
     { name: 'auto_hide_reviewed', selector: { boolean: {} } },
     { name: 'auto_hide_watched', selector: { boolean: {} } },
     { name: 'collapse_when_empty', selector: { boolean: {} } },
@@ -4781,6 +4811,9 @@ class FrigateEventsPlusEditor extends LitElement {
           labels: 'Objects to include (leave empty for all)',
           highlight_new_events: 'Highlight newly detected events',
           play_notification_sound: 'Play a sound for new events',
+          priority_labels: 'Priority objects to highlight',
+          priority_first: 'Show priority events first',
+          priority_color: 'Priority highlight colour',
           auto_hide_reviewed: 'Hide reviewed events',
           auto_hide_watched: 'Hide clips after full playback',
           collapse_when_empty: 'Collapse card when empty',
