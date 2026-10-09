@@ -24,6 +24,10 @@ jobs:
       - run: npm run build
       - name: Verify distributable exists
         run: test -s frigate-events-plus.js
+      - name: Verify custom element registration
+        run: grep -q 'frigate-events-plus' frigate-events-plus.js
+      - name: Verify bundle has expected card registration
+        run: grep -q 'customCards' frigate-events-plus.js
       - name: Attach beta bundle to release
         if: github.event_name == 'workflow_dispatch'
         env:
