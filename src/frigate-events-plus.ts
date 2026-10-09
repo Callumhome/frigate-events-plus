@@ -61,6 +61,8 @@ interface FrigateEventsCardConfig extends LovelaceCardConfig {
   video_on_hover?: boolean;
   auto_hide_watched?: boolean;
   auto_hide_reviewed?: boolean;
+  collapse_when_empty?: boolean;
+  empty_state_text?: string;
   muted?: boolean;
   offset?: number;
   reverse?: boolean;
@@ -106,6 +108,8 @@ const DEFAULT_CONFIG: Partial<FrigateEventsCardConfig> = {
   title: 'Frigate Events Plus',
   auto_hide_watched: false,
   auto_hide_reviewed: false,
+  collapse_when_empty: true,
+  empty_state_text: 'Frigate — No New Events',
   video: true,
   video_on_hover: true,
   muted: true,
@@ -4188,7 +4192,9 @@ export class FrigateEventsCard extends LitElement {
             ? html`<div class="loading"></div>`
             : this._error && this._events.length === 0
               ? html``
-              : html`
+              : this._config.collapse_when_empty !== false && visibleEvents.length === 0
+                ? html`<div class="empty-state">${this._config.empty_state_text || 'Frigate — No New Events'}</div>`
+                : html`
                   <div class="events-container">
                     ${showScrollArrows ? html`
                       <button class="scroll-btn prev" @click=${() => this._scroll('left')} aria-label="Previous">
@@ -4361,6 +4367,19 @@ export class FrigateEventsCard extends LitElement {
 
       .loading {
         min-height: 80px;
+      }
+
+      .empty-state {
+        display: block;
+        width: 100%;
+        box-sizing: border-box;
+        padding: 8px 12px;
+        color: var(--secondary-text-color, var(--primary-text-color));
+        font-size: var(--ha-font-size-m, 14px);
+        line-height: 1.4;
+        font-weight: 500;
+        text-align: left;
+        background: transparent;
       }
 
       .events-container {
