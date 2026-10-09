@@ -61,6 +61,8 @@ interface FrigateEventsCardConfig extends LovelaceCardConfig {
   video_on_hover?: boolean;
   auto_hide_watched?: boolean;
   auto_hide_reviewed?: boolean;
+  highlight_new_events?: boolean;
+  play_notification_sound?: boolean;
   collapse_when_empty?: boolean;
   empty_state_text?: string;
   muted?: boolean;
@@ -108,6 +110,8 @@ const DEFAULT_CONFIG: Partial<FrigateEventsCardConfig> = {
   title: 'Frigate Events Plus',
   auto_hide_watched: false,
   auto_hide_reviewed: false,
+  highlight_new_events: false,
+  play_notification_sound: false,
   collapse_when_empty: true,
   empty_state_text: 'Frigate — No New Events',
   video: true,
@@ -145,6 +149,8 @@ export class FrigateEventsCard extends LitElement {
   @property({ attribute: false }) public hass?: HomeAssistant;
   @state() private _config?: FrigateEventsCardConfig;
   @state() private _events: FrigateEvent[] = [];
+  @state() private _newEventIds: string[] = [];
+  private _hasCompletedInitialEventLoad = false;
   @state() private _watchedEventIds: string[] = [];
   @state() private _reviewedSegments: Array<{ camera: string; start_time: number; end_time?: number; data?: { objects?: string[] } }> = [];
   @state() private _selectedEvent?: FrigateEvent;
@@ -866,7 +872,17 @@ export class FrigateEventsCard extends LitElement {
         has_snapshot: true,
       });
 
-      this._events = events.sort((a, b) => (b.start_time || 0) - (a.start_time || 0));
+      const sortedEvents = events.sort((a, b) => (b.start_time || 0) - (a.start_time || 0));
+      if (this._hasCompletedInitialEventLoad) {
+        const previousIds = new Set(this._events.map(event => event.id));
+        const newlyDetected = sortedEvents.filter(event => !previousIds.has(event.id));
+        if (newlyDetected.length) {
+          this._newEventIds = [...new Set([...this._newEventIds, ...newlyDetected.map(event => event.id)])];
+          if (this._config.play_notification_sound) this._playNewEventSound();
+        }
+      }
+      this._events = sortedEvents;
+      this._hasCompletedInitialEventLoad = true;
       await this._loadReviewedSegments(events);
     } catch (e: any) {
       console.warn('Temporary connection issue loading Frigate events:', e);
@@ -2180,6 +2196,28 @@ export class FrigateEventsCard extends LitElement {
     } catch (error) {
       console.warn('Frigate Events Plus: unable to load watched-event history.', error);
       this._watchedEventIds = [];
+    }
+  }
+
+  private _playNewEventSound(): void {
+    try {
+      const AudioContextClass = window.AudioContext;
+      if (!AudioContextClass) return;
+      const context = new AudioContextClass();
+      const oscillator = context.createOscillator();
+      const gain = context.createGain();
+      oscillator.type = 'sine';
+      oscillator.frequency.value = 880;
+      gain.gain.setValueAtTime(0.0001, context.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.12, context.currentTime + 0.02);
+      gain.gain.exponentialRampToValueAtTime(0.0001, context.currentTime + 0.22);
+      oscillator.connect(gain);
+      gain.connect(context.destination);
+      oscillator.start();
+      oscillator.stop(context.currentTime + 0.24);
+      oscillator.onended = () => { void context.close(); };
+    } catch (error) {
+      console.debug('Frigate Events Plus: notification sound unavailable in this browser.', error);
     }
   }
 
@@ -4292,7 +4330,7 @@ export class FrigateEventsCard extends LitElement {
     const thumbnailUrl = getEventThumbnailURL(clientId, event.id);
 
     return html`
-      <div class="event"
+      <div class="event" class=${this._config?.highlight_new_events && this._newEventIds.includes(event.id) ? "new-event" : ""}
         @click=${() => this._handleEventClick(event)}
         @contextmenu=${(e: MouseEvent) => this._handleContextMenu(e, event)}
         @touchstart=${(e: TouchEvent) => this._handleTouchStart(e, event)}
@@ -4516,6 +4554,11 @@ export class FrigateEventsCard extends LitElement {
         touch-action: pan-x pan-y;
       }
 
+      .event.new-event {
+        outline: 3px solid var(--warning-color, #f9a825);
+        outline-offset: -3px;
+      }
+
       .event:hover {
         transform: scale(1.02);
         opacity: 0.9;
@@ -4679,6 +4722,18 @@ class FrigateEventsPlusEditor extends LitElement {
     { name: 'title', selector: { text: {} } },
     { name: 'frigate_client_id', selector: { text: {} } },
     { name: 'event_count', selector: { number: { min: 1, max: 100, mode: 'box' } } },
+    { name: 'reverse', selector: { boolean: {} } },
+    { name: 'cameras', selector: { select: { multiple: true, options: [] } } },
+    { name: 'labels', selector: { select: { multiple: true, options: [
+      { label: 'Person', value: 'person' }, { label: 'Car', value: 'car' },
+      { label: 'Bicycle', value: 'bicycle' }, { label: 'Motorcycle', value: 'motorcycle' },
+      { label: 'Bus', value: 'bus' }, { label: 'Truck', value: 'truck' },
+      { label: 'Cat', value: 'cat' }, { label: 'Dog', value: 'dog' },
+      { label: 'Bird', value: 'bird' }, { label: 'Horse', value: 'horse' },
+      { label: 'Other', value: 'other' }
+    ] } } },
+    { name: 'highlight_new_events', selector: { boolean: {} } },
+    { name: 'play_notification_sound', selector: { boolean: {} } },
     { name: 'auto_hide_reviewed', selector: { boolean: {} } },
     { name: 'auto_hide_watched', selector: { boolean: {} } },
     { name: 'collapse_when_empty', selector: { boolean: {} } },
@@ -4701,16 +4756,31 @@ class FrigateEventsPlusEditor extends LitElement {
     }));
   }
 
+  private get _editorSchema() {
+    const cameras = Object.values(this.hass?.states || {})
+      .filter(entity => entity.entity_id.startsWith('camera.'))
+      .map(entity => ({ label: entity.attributes.friendly_name || entity.entity_id.replace(/^camera\\./, '').replace(/_/g, ' '), value: entity.entity_id.replace(/^camera\\./, '') }))
+      .sort((a, b) => a.label.localeCompare(b.label));
+    return this._schema.map(item => item.name === 'cameras'
+      ? { ...item, selector: { select: { multiple: true, options: cameras } } }
+      : item);
+  }
+
   protected render() {
     return html`
       <ha-form
         .hass=${this.hass}
         .data=${this._config}
-        .schema=${this._schema}
+        .schema=${this._editorSchema}
         .computeLabel=${(schema: { name: string }) => ({
           title: 'Card title',
           frigate_client_id: 'Frigate integration client ID',
           event_count: 'Maximum events to show',
+          reverse: 'Show oldest events first',
+          cameras: 'Cameras to include (leave empty for all)',
+          labels: 'Objects to include (leave empty for all)',
+          highlight_new_events: 'Highlight newly detected events',
+          play_notification_sound: 'Play a sound for new events',
           auto_hide_reviewed: 'Hide reviewed events',
           auto_hide_watched: 'Hide clips after full playback',
           collapse_when_empty: 'Collapse card when empty',
