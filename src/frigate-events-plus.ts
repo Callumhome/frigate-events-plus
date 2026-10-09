@@ -893,9 +893,29 @@ export class FrigateEventsCard extends LitElement {
         limit: 1000,
       } as any);
       const parsed: unknown = typeof response === 'string' ? JSON.parse(response) : response;
+      const toUnixSeconds = (value: unknown): number | undefined => {
+        if (typeof value === 'number' && Number.isFinite(value)) {
+          // Frigate review APIs use Unix seconds; tolerate milliseconds defensively.
+          return value > 100000000000 ? value / 1000 : value;
+        }
+        if (typeof value === 'string' && value.trim()) {
+          const numeric = Number(value);
+          if (Number.isFinite(numeric)) {
+            return numeric > 100000000000 ? numeric / 1000 : numeric;
+          }
+          const parsedDate = Date.parse(value);
+          if (Number.isFinite(parsedDate)) return parsedDate / 1000;
+        }
+        return undefined;
+      };
       this._reviewedSegments = Array.isArray(parsed)
-        ? parsed.filter((item: any) => item && typeof item.camera === 'string' && typeof item.start_time === 'number' && item.has_been_reviewed === true)
-            .map((item: any) => ({ camera: item.camera, start_time: item.start_time, end_time: item.end_time, data: item.data }))
+        ? parsed.flatMap((item: any) => {
+            if (!item || typeof item.camera !== 'string' || item.has_been_reviewed !== true) return [];
+            const start_time = toUnixSeconds(item.start_time);
+            const end_time = toUnixSeconds(item.end_time);
+            if (start_time === undefined) return [];
+            return [{ camera: item.camera, start_time, end_time, data: item.data }];
+          })
         : [];
     } catch (error) {
       // Older Frigate HA integrations may not expose frigate/reviews/get. Keep the
