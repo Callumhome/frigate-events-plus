@@ -3,6 +3,8 @@ name: Build Frigate Events Plus
 on:
   push:
     branches: [main]
+    tags:
+      - "v*"
   pull_request:
     branches: [main]
   workflow_dispatch:
@@ -17,30 +19,44 @@ jobs:
       - uses: actions/checkout@v4
         with:
           persist-credentials: true
+
       - uses: actions/setup-node@v4
         with:
           node-version: 20
+
       - run: npm install
       - run: npm run build
+
       - name: Verify distributable exists
         run: test -s frigate-events-plus.js
+
       - name: Verify custom element registration
         run: grep -q 'frigate-events-plus' frigate-events-plus.js
+
       - name: Verify bundle has expected card registration
         run: grep -q 'customCards' frigate-events-plus.js
-      - name: Create beta 3 release and attach bundle
-        if: github.event_name == 'workflow_dispatch'
+
+      - name: Attach bundle to tagged release
+        if: startsWith(github.ref, 'refs/tags/v')
         env:
           GH_TOKEN: ${{ github.token }}
+          TAG_NAME: ${{ github.ref_name }}
         run: |
-          if ! gh release view v2.5.0-beta.3 >/dev/null 2>&1; then
-            gh release create v2.5.0-beta.3 frigate-events-plus.js \
-              --prerelease \
-              --title "v2.5.0-beta.3" \
-              --notes "Beta 3: adds the Home Assistant visual card editor for configuring watched-event hiding, reviewed-event hiding, and the compact empty state without YAML edits. The card can now be configured using Home Assistant's visual editor. Choose whether to hide reviewed events, hide clips after full playback, collapse the card when empty, and edit the empty-state message. These options hide items from the card only; they do not delete Frigate recordings or review data."
+          if gh release view "$TAG_NAME" >/dev/null 2>&1; then
+            gh release upload "$TAG_NAME" frigate-events-plus.js --clobber
           else
-            gh release upload v2.5.0-beta.3 frigate-events-plus.js --clobber
+            if [[ "$TAG_NAME" == *"-"* ]]; then
+              gh release create "$TAG_NAME" frigate-events-plus.js \
+                --prerelease \
+                --generate-notes \
+                --title "$TAG_NAME"
+            else
+              gh release create "$TAG_NAME" frigate-events-plus.js \
+                --generate-notes \
+                --title "$TAG_NAME"
+            fi
           fi
+
       - name: Commit updated distributable
         if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
         run: |
