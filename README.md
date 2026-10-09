@@ -31,6 +31,9 @@ Frigate Events Plus includes a Home Assistant visual editor. After installing a 
 - Hide clips after full playback
 - Collapse the card when no events remain
 - Set the empty-state message
+- Choose cameras and common object labels to include (empty selections mean all cameras/labels)
+- Choose whether to show oldest events first
+- Highlight newly detected events and optionally play a short sound
 - Configure the card title, Frigate client ID, and maximum event count
 
 Advanced users can still configure the card with YAML if preferred.
@@ -46,7 +49,7 @@ collapse_when_empty: true
 empty_state_text: "Frigate — No New Events"
 ```
 
-`auto_hide_watched` and `auto_hide_reviewed` default to `false`. `collapse_when_empty` defaults to `true`; set it to `false` to retain the old empty thumbnail placeholders. `empty_state_text` defaults to `Frigate — No New Events`. These options only affect the card display. Reviewed-event filtering requires a version of the Frigate Home Assistant integration that supports the `frigate/reviews/get` WebSocket command. If that command is unavailable, the card keeps events visible rather than guessing.
+`auto_hide_watched`, `auto_hide_reviewed`, `highlight_new_events`, `play_notification_sound`, and `reverse` default to `false`. `collapse_when_empty` defaults to `true`; set it to `false` to retain the old empty thumbnail placeholders. `empty_state_text` defaults to `Frigate — No New Events`. These options only affect the card display. Reviewed-event filtering requires a version of the Frigate Home Assistant integration that supports the `frigate/reviews/get` WebSocket command. If that command is unavailable, the card keeps events visible rather than guessing.
 
 ## Development
 
