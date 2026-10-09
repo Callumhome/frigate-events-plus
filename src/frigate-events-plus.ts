@@ -206,14 +206,18 @@ export class FrigateEventsCard extends LitElement {
     return resetTime.getTime() / 1000; // Return as Unix timestamp (seconds)
   }
 
-  static getConfigElement(): HTMLElement | null {
-    return null; // No visual editor for now
-  }
+  static getConfigElement(): HTMLElement {
+    return document.createElement('frigate-events-plus-editor');
+}
 
   static getStubConfig(): object {
     return {
       frigate_client_id: 'frigate',
       event_count: 5,
+      auto_hide_watched: true,
+      auto_hide_reviewed: true,
+      collapse_when_empty: true,
+      empty_state_text: 'Frigate — No New Events',
     };
   }
 
@@ -4663,3 +4667,57 @@ console.info(
   'color: white; background: #3b82f6; font-weight: bold;',
   'color: #3b82f6; background: white;'
 );
+
+
+/** Visual editor for common Frigate Events Plus card settings. */
+@customElement('frigate-events-plus-editor')
+class FrigateEventsPlusEditor extends LitElement {
+  @property({ attribute: false }) public hass?: HomeAssistant;
+  @state() private _config: FrigateEventsCardConfig = { ...DEFAULT_CONFIG };
+
+  private _schema = [
+    { name: 'title', selector: { text: {} } },
+    { name: 'frigate_client_id', selector: { text: {} } },
+    { name: 'event_count', selector: { number: { min: 1, max: 100, mode: 'box' } } },
+    { name: 'auto_hide_reviewed', selector: { boolean: {} } },
+    { name: 'auto_hide_watched', selector: { boolean: {} } },
+    { name: 'collapse_when_empty', selector: { boolean: {} } },
+    { name: 'empty_state_text', selector: { text: {} } },
+  ];
+
+  public setConfig(config: FrigateEventsCardConfig): void {
+    this._config = { ...DEFAULT_CONFIG, ...config };
+  }
+
+  private _valueChanged(event: CustomEvent): void {
+    event.stopPropagation();
+    const value = event.detail?.value;
+    if (!value) return;
+    this._config = { ...this._config, ...value };
+    this.dispatchEvent(new CustomEvent('config-changed', {
+      detail: { config: this._config },
+      bubbles: true,
+      composed: true,
+    }));
+  }
+
+  protected render() {
+    return html`
+      <ha-form
+        .hass=${this.hass}
+        .data=${this._config}
+        .schema=${this._schema}
+        .computeLabel=${(schema: { name: string }) => ({
+          title: 'Card title',
+          frigate_client_id: 'Frigate integration client ID',
+          event_count: 'Maximum events to show',
+          auto_hide_reviewed: 'Hide reviewed events',
+          auto_hide_watched: 'Hide clips after full playback',
+          collapse_when_empty: 'Collapse card when empty',
+          empty_state_text: 'Message shown when there are no new events',
+        }[schema.name] ?? schema.name)}
+        @value-changed=${this._valueChanged}
+      ></ha-form>
+    `;
+  }
+}
