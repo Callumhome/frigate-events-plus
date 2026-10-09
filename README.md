@@ -34,6 +34,7 @@ Frigate Events Plus includes a Home Assistant visual editor. After installing a 
 - Choose cameras and common object labels to include (empty selections mean all cameras/labels)
 - Choose whether to show oldest events first
 - Highlight newly detected events and optionally play a short sound
+- Mark selected object labels as priority events, choose a highlight colour, and optionally sort priority events first
 - Configure the card title, Frigate client ID, and maximum event count
 
 Advanced users can still configure the card with YAML if preferred.
@@ -49,7 +50,7 @@ collapse_when_empty: true
 empty_state_text: "Frigate — No New Events"
 ```
 
-`auto_hide_watched`, `auto_hide_reviewed`, `highlight_new_events`, `play_notification_sound`, and `reverse` default to `false`. `collapse_when_empty` defaults to `true`; set it to `false` to retain the old empty thumbnail placeholders. `empty_state_text` defaults to `Frigate — No New Events`. These options only affect the card display. Reviewed-event filtering requires a version of the Frigate Home Assistant integration that supports the `frigate/reviews/get` WebSocket command. If that command is unavailable, the card keeps events visible rather than guessing.
+`auto_hide_watched`, `auto_hide_reviewed`, `highlight_new_events`, `play_notification_sound`, `priority_first`, and `reverse` default to `false`. Priority labels are optional; priority highlighting defaults to orange. `collapse_when_empty` defaults to `true`; set it to `false` to retain the old empty thumbnail placeholders. `empty_state_text` defaults to `Frigate — No New Events`. These options only affect the card display. Reviewed-event filtering requires a version of the Frigate Home Assistant integration that supports the `frigate/reviews/get` WebSocket command. If that command is unavailable, the card keeps events visible rather than guessing.
 
 ## Development
 
