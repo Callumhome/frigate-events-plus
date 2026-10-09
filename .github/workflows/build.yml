@@ -7,16 +7,30 @@ on:
     branches: [main]
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: true
       - uses: actions/setup-node@v4
         with:
           node-version: 20
-          cache: npm
       - run: npm install
       - run: npm run build
       - name: Verify distributable exists
         run: test -s frigate-events-plus.js
+      - name: Commit updated distributable
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          if ! git diff --quiet -- frigate-events-plus.js; then
+            git add frigate-events-plus.js
+            git commit -m "build: update Frigate Events Plus bundle"
+            git push
+          fi
